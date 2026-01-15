@@ -37,6 +37,9 @@ export CUDA_NVCC_FLAGS="-arch=sm_120"   # 根据显卡性能实际调整
 ```
 
 ## CUDA 硬件与工具探索
+
+[在线绘图](https://excalidraw.com/)
+
 [techpowerup](https://www.techpowerup.com/gpu-specs/)
 
 ## Nsight Compute
@@ -81,3 +84,9 @@ export CUDA_NVCC_FLAGS="-arch=sm_120"   # 根据显卡性能实际调整
     // bandwidth = 内存频率 * Prefetch * 内存位宽 / 8
     1.01 TB/s = 1313MHz * 16 * 384 bit / 8
     ```
+
+## 优化相关
+
+    数据 tilling，优化内存访问，减少全局 内存带宽
+
+    线程 tilling，优化线程协作，提供灵活的线程组织
