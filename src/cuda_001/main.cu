@@ -1,6 +1,17 @@
+/**
+ * @file main.cu
+ * @author Jia-Baos (18383827268@163.com)
+ * @brief 
+ * @version 0.1
+ * @date 2026-01-15
+ * 
+ * @copyright Copyright (c) 2026
+ * 
+ */
 #include <stdio.h>
 #include <iostream>
 #include <cuda_runtime.h>
+#include <nvtx3/nvToolsExt.h>
 
 void printDeviceInfo()
 {
@@ -57,51 +68,70 @@ __global__ void vectorAdd(int *a, int *b, int *c, int n)
 
 int main()
 {
-    printf("Hello World from CPU!\n");
-
     printDeviceInfo();
 
-    cuda_hello<<<5, 2>>>();
-    cudaError_t err = cudaDeviceReset();
-    if (err != cudaSuccess)
-    {
-        fprintf(stderr, "cudaDeviceReset failed: %s\n", cudaGetErrorString(err));
-    }
+    // cuda_hello<<<5, 2>>>();
+    // cudaError_t err = cudaDeviceReset();
+    // if (err != cudaSuccess)
+    // {
+    //     fprintf(stderr, "cudaDeviceReset failed: %s\n", cudaGetErrorString(err));
+    // }
 
-    const int N = 608 * 256;
+    // const int N = 608 * 256;
+    const int N = 1024 * 256;
     int h_a[N], h_b[N], h_c[N];
+    nvtxRangePush("Init Array");
     for (int i = 0; i < N; i++)
     {
         h_a[i] = i;
         h_b[i] = i * i;
     }
+    nvtxRangePop();
 
     int *d_a;
     int *d_b;
     int *d_c;
+    nvtxRangePush("Cuda Malloc");
     cudaMalloc(&d_a, sizeof(int) * N);
     cudaMalloc(&d_b, sizeof(int) * N);
     cudaMalloc(&d_c, sizeof(int) * N);
+    nvtxRangePop();
 
+    nvtxRangePush("Memory Copy H2D");
     cudaMemcpy(d_a, h_a, sizeof(int) * N, cudaMemcpyHostToDevice);
     cudaMemcpy(d_b, h_b, sizeof(int) * N, cudaMemcpyHostToDevice);
+    nvtxRangePop();
 
     // 限制1：每个线程块可以使用的线程数限制
     // 限制2：每个线程块可以使用的共享内存限制
     // 限制3：每个线程块可以使用的寄存器数量限制
     // 对于当前设备 38个SM，每SM最多16个线程块，每块最多1024个线程
-    vectorAdd<<<608, 256>>>(d_a, d_b, d_c, N);
+    nvtxRangePush("Kernel Launch vectorAdd");
+    // vectorAdd<<<608, 256>>>(d_a, d_b, d_c, N);
+    vectorAdd<<<256, 1024>>>(d_a, d_b, d_c, N);
+    vectorAdd<<<512, 512>>>(d_a, d_b, d_c, N);
+    vectorAdd<<<1024, 256>>>(d_a, d_b, d_c, N);
+    vectorAdd<<<2048, 128>>>(d_a, d_b, d_c, N);
+    vectorAdd<<<262144, 1>>>(d_a, d_b, d_c, N);
+    cudaDeviceSynchronize();
+    nvtxRangePop();
 
+    nvtxRangePush("Memory Copy D2H");
     cudaMemcpy(h_c, d_c, sizeof(int) * N, cudaMemcpyDeviceToHost);
+    nvtxRangePop();
 
+    nvtxRangePush("Print Results");
     for (int i = 0; i < 20; i++)
     {
         printf("%d + %d = %d\n", h_a[i], h_b[i], h_c[i]);
     }
+    nvtxRangePop();
 
     cudaFree(d_a);
     cudaFree(d_b);
     cudaFree(d_c);
+
+    nvtxMarkA("End of Main");
 
     return 0;
 }
