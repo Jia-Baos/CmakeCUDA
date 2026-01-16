@@ -202,13 +202,13 @@ int main()
     cudaEventRecord(stop_1);
     cudaEventSynchronize(stop_1);
 
+    cudaDeviceSynchronize();
+
     cudaMemcpy(&h_gpu_result_native, d_gpu_result_native, sizeof(int), cudaMemcpyDeviceToHost);
 
     float gpu_time_1;
     cudaEventElapsedTime(&gpu_time_1, start_1, stop_1);
     std::cout << "findMaxGPU_native, GPU max: " << h_gpu_result_native << ", time: " << gpu_time_1 << " ms" << std::endl;
-
-    cudaDeviceSynchronize();
 
     cudaEventDestroy(start_1);
     cudaEventDestroy(stop_1);
@@ -231,13 +231,13 @@ int main()
     cudaEventRecord(stop_2);
     cudaEventSynchronize(stop_2);
 
+    cudaDeviceSynchronize();
+
     cudaMemcpy(&h_gpu_result_shared, d_gpu_result_shared, sizeof(int), cudaMemcpyDeviceToHost);
 
     float gpu_time_2;
     cudaEventElapsedTime(&gpu_time_2, start_2, stop_2);
     std::cout << "findMaxGPU_shared, GPU max: " << h_gpu_result_shared << ", time: " << gpu_time_2 << " ms" << std::endl;
-
-    cudaDeviceSynchronize();
 
     cudaEventDestroy(start_2);
     cudaEventDestroy(stop_2);
@@ -259,13 +259,13 @@ int main()
     cudaEventRecord(stop_3);
     cudaEventSynchronize(stop_3);
 
+    cudaDeviceSynchronize();
+
     cudaMemcpy(&h_gpu_result_warp, d_gpu_result_warp, sizeof(int), cudaMemcpyDeviceToHost);
 
     float gpu_time_3;
     cudaEventElapsedTime(&gpu_time_3, start_3, stop_3);
     std::cout << "findMaxGPU_warp, GPU max: " << h_gpu_result_warp << ", time: " << gpu_time_3 << " ms" << std::endl;
-
-    cudaDeviceSynchronize();
 
     cudaEventDestroy(start_3);
     cudaEventDestroy(stop_3);

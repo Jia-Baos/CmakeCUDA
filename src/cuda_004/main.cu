@@ -218,10 +218,9 @@ int main()
     float *d_A;
     float *d_B;
     float *d_C;
-    // cudaMallocManaged分配的内存（堆内存），必须使用 cudaFree 释放
-    CUDA_CHECK(cudaMallocManaged(&d_A, M * K * sizeof(float)));
-    CUDA_CHECK(cudaMallocManaged(&d_B, K * N * sizeof(float)));
-    CUDA_CHECK(cudaMallocManaged(&d_C, M * N * sizeof(float)));
+    CUDA_CHECK(cudaMalloc(&d_A, M * K * sizeof(float)));
+    CUDA_CHECK(cudaMalloc(&d_B, K * N * sizeof(float)));
+    CUDA_CHECK(cudaMalloc(&d_C, M * N * sizeof(float)));
 
     srand(time(NULL));
     initMatRandom(h_A, M, K);
@@ -254,11 +253,11 @@ int main()
     cudaEventRecord(stop_1);
     cudaEventSynchronize(stop_1);
 
+    cudaDeviceSynchronize();
+
     float gpu_time_1;
     cudaEventElapsedTime(&gpu_time_1, start_1, stop_1);
     std::cout << "matmulGPU_native, time: " << gpu_time_1 << " ms" << std::endl;
-
-    cudaDeviceSynchronize();
 
     cudaMemcpy(h_C_native, d_C, M * N * sizeof(float), cudaMemcpyDeviceToHost);
 
@@ -284,11 +283,11 @@ int main()
     cudaEventRecord(stop_2);
     cudaEventSynchronize(stop_2);
 
+    cudaDeviceSynchronize();
+
     float gpu_time_2;
     cudaEventElapsedTime(&gpu_time_2, start_2, stop_2);
     std::cout << "matmulGPU_tiled, time: " << gpu_time_2 << " ms" << std::endl;
-
-    cudaDeviceSynchronize();
 
     cudaMemcpy(h_C_tiled, d_C, M * N * sizeof(float), cudaMemcpyDeviceToHost);
 
@@ -317,11 +316,11 @@ int main()
     cudaEventRecord(stop_3);
     cudaEventSynchronize(stop_3);
 
+    cudaDeviceSynchronize();
+    
     float gpu_time_3;
     cudaEventElapsedTime(&gpu_time_3, start_3, stop_3);
     std::cout << "matmulGPU_tiled4, time: " << gpu_time_3 << " ms" << std::endl;
-
-    cudaDeviceSynchronize();
 
     cudaMemcpy(h_C_tiled4, d_C, M * N * sizeof(float), cudaMemcpyDeviceToHost);
 

@@ -142,11 +142,11 @@ int main()
     cudaEventRecord(stop_1);
     cudaEventSynchronize(stop_1);
 
+    cudaDeviceSynchronize();
+
     float gpu_time_1;
     cudaEventElapsedTime(&gpu_time_1, start_1, stop_1);
     std::cout << "findMaxGPU_native, GPU max: " << *gpu_result_native << ", time: " << gpu_time_1 << " ms" << std::endl;
-
-    cudaDeviceSynchronize();
 
     cudaEventDestroy(start_1);
     cudaEventDestroy(stop_1);
@@ -166,11 +166,11 @@ int main()
     cudaEventRecord(stop_2);
     cudaEventSynchronize(stop_2);
 
+    cudaDeviceSynchronize();
+
     float gpu_time_2;
     cudaEventElapsedTime(&gpu_time_2, start_2, stop_2);
     std::cout << "findMaxGPU_shared, GPU max: " << *gpu_result_shared << ", time: " << gpu_time_2 << " ms" << std::endl;
-
-    cudaDeviceSynchronize();
 
     cudaEventDestroy(start_2);
     cudaEventDestroy(stop_2);

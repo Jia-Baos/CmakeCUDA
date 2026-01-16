@@ -42,7 +42,7 @@ export CUDA_NVCC_FLAGS="-arch=sm_120"   # 根据显卡性能实际调整
 
 [techpowerup](https://www.techpowerup.com/gpu-specs/)
 
-## Nsight Compute
+### Nsight Compute
 
     1. 分析数据采集
     ```bash
@@ -85,7 +85,18 @@ export CUDA_NVCC_FLAGS="-arch=sm_120"   # 根据显卡性能实际调整
     1.01 TB/s = 1313MHz * 16 * 384 bit / 8
     ```
 
-## 优化相关
+3. CUDA 核心计算库（CCCL）提供了一个方便的工具，用于进行上限除法，以计算内核启动所需的块数。该工具通过包含头部 来实现。```cuda::ceil_div<cuda/cmath>```
+
+    ```C++
+    // vectorLength is an integer storing number of elements in the vector
+    int threads = 256;
+    int blocks = cuda::ceil_div(vectorLength, threads);
+    vecAdd<<<blocks, threads>>>(devA, devB, devC, vectorLength);
+    ```
+
+    这里每块256个线程的选择是任意的，但这通常是个不错的起点。
+
+## CUDA 优化相关
 
     数据 tilling，优化内存访问，减少全局 内存带宽
 
