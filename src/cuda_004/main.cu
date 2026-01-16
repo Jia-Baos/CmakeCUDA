@@ -120,6 +120,7 @@ __global__ void matmulGPU_tiled(float *A, float *B, float *C, int M, int N, int 
 
 __global__ void matmulGPU_tiled4(float *A, float *B, float *C, int M, int N, int K)
 {
+    // 通过 Cooperative Groups（协作组）编程模型，获取当前线程所属的块级协作组
     cooperative_groups::thread_block block = cooperative_groups::this_thread_block();
 
     int ty = threadIdx.y;

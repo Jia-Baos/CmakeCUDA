@@ -72,6 +72,10 @@ CUDA 编程模型使任意大的 Grid 能够在任何大小的 GPU 上运行，�
 
 </div>
 
+参考内容：
+
+1. Cluster（集群）是 CUDA 中一个高层级的硬件 / 执行范围抽象，而 Cooperative Groups（协作组，简称 CG）是一套用于显式管理和同步不同粒度并行实体的软件编程模型 / API，Cluster 是 Cooperative Groups 能够支持和管理的最高（最粗）粒度之一，二者是「硬件 / 范围抽象」与「软件管理工具」的对应关系，Cooperative Groups 为 Cluster 提供了标准化的编程接口和同步能力。
+
 ## Warps and SIMT
 
 在一个 Thread Block 内，线程被组织成 32 个线程组成的 Group，称为 Warps。Warp 在单指令多线程（SIMT）范式中执行内核代码。在 SIMT 中，Warp 中的所有线程执行的是相同的内核代码，但每个线程可能遵循代码中的不同分支。也就是说，虽然程序中的所有线程执行相同的代码，但线程不必遵循相同的执行路径。
@@ -94,6 +98,12 @@ Warp 中的所有线程同时执行同一条指令。如果  Warp 中的某些�
 Warp 执行的一个含义是，Thread Block 最好指定为线程总数，即 32 的倍数。使用任意数量的线程是合法的，但当总数不是 32 的倍数时，Thread Block 的最后一个 Warp 会有一些执行过程中未使用的 lane。这很可能导致该 Warp 的功能单元利用率和内存访问不优。
 
 SIMT 常被拿来与单指令多数据（SIMD）并行处理比较，但它们存在一些重要区别。在 SIMD 中，执行遵循单一的控制流路径，而在 SIMT 中，每个线程允许遵循自己的控制流路径。因此，SIMT 不像 SIMD 那样有固定的数据宽度。
+
+参考内容：
+
+1. Warp 是 CUDA 架构中最基本的执行单元和调度单元，GPU 的并行计算能力最终都是通过 Warp 层面的高效执行来落地的，它是连接线程（Thread）和 GPU 流多处理器（SM, Streaming Multiprocessor）的关键桥梁。
+
+2. 在 CUDA 中，一个 Warp 固定包含 32 个连续的线程（Thread），这些线程会被 GPU 作为一个单一的、不可分割的整体进行调度和执行，这是理解 Warp 作用的前提。
 
 ## GPU 内存
 

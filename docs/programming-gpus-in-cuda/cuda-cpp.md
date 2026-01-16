@@ -181,7 +181,7 @@ CUDA_CHECK(cudaGetLastError());
 CUDA_CHECK(cudaDeviceSynchronize());
 ```
 
-### ```CUDA_LOG_FILE``
+### ```CUDA_LOG_FILE```
 
 将错误信息写入到本地文件
 

@@ -47,7 +47,7 @@ __global__ void findMaxGPU_native(int *data, int n, int *result)
 
     int local_max = INT_MIN;
 
-    // avoid branch divergence
+    // avoid branch divergence，单个线程读多次数据
     for (size_t i = idx; i < n; i += stride) {
         if (data[i] > local_max) {
             local_max = data[i];
