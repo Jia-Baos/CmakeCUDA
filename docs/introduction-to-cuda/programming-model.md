@@ -16,13 +16,13 @@ GPU（整个显卡）
     └── L2 缓存、显存控制器等全局资源
 ```
 
-### GPU 硬件模型
+## GPU 硬件模型
 
 像任何编程模型一样，CUDA 依赖于底层硬件的概念模型。在 CUDA 编程中，GPU 可以被视为一组流式多处理器（SM），这些 SM 被组织成称为图形处理集群（GPC）的组。每个 SM 包含一个本地寄存器文件、统一的数据缓存以及多个执行计算的功能单元。统一的数据缓存为共享内存和 L1 缓存提供物理资源。统一数据缓存的分配可通过运行时配置 L1 和共享内存。不同类型的内存大小以及 SM 中功能单元数量可能因 GPU 架构而异。
 
 <div align="center">
 
-<img src="./imgs-cuda/gpu-cpu-system-diagram.png" />
+<img src="../imgs-cuda/gpu-cpu-system-diagram.png" />
 <p>GPU 包含多个流式多处理器（SM），每个 SM 包含许多功能单元。图形处理集群（GPC）是 SM 的集合。GPU 是一组连接到 GPU 内存的 GPC。CPU 通常有多个核心和一个连接系统内存的内存控制器。CPU 和 GPU 通过 PCIe 或 NVLINK 等互连连接连接。</p>
 
 </div>
@@ -33,7 +33,7 @@ GPU（整个显卡）
 
 <div align="center">
 
-<img src="./imgs-cuda/grid-of-thread-blocks.png" />
+<img src="../imgs-cuda/grid-of-thread-blocks.png" />
 <p>Grid of Thread Blocks。每个箭头代表一个线程（箭头数量并不代表实际线程的数量）。</p>
 
 </div>
@@ -45,20 +45,20 @@ GPU（整个显卡）
 
 <div align="center">
 
-<img src="./imgs-cuda/thread-block-scheduling.png" />
+<img src="../imgs-cuda/thread-block-scheduling.png" />
 <p>每个 SM 有一个或多个活跃 Thread Block。在这个例子中，每个 SM 同时调度三个 Thread Block。对于 Grid 中 Thread Block 分配给 SM 的顺序没有保证。</p>
 
 </div>
 
 CUDA 编程模型使任意大的 Grid 能够在任何大小的 GPU 上运行，无论它只有一个 SM 还是数千个 SM。为此，CUDA 编程模型（除少数例外）要求不同 Thread Block 中线程之间不存在数据依赖关系。也就是说，线程不应依赖于同一 Grid 中不同 Thread Block 内的线程结果或与线程同步。Thread Block 内的所有线程同时运行在同一个 SM 上。Grid 内的不同 Thread Block 在可用 SM 之间被调度，并可按任意顺序执行。```简而言之，CUDA 编程模型要求可以任意顺序执行 Thread Block，无论是并行还是串联```。
 
-### Thread Block Clusters
+## Thread Block Clusters
 
 除了 Thread Block 外，具备 9.0 及以上计算能力的 GPU 还有一种称为 Cluster 的可选分组层级。Cluster 是一组 Thread Block，像 Thread Block 和 Grid 一样，可以布局为一维、二维或三维。指定 Cluster 不会改变 Grid 中的 Grid 尺寸或 Thread Block 的索引。
 
 <div align="center">
 
-<img src="./imgs-cuda/grid-of-clusters.png" />
+<img src="../imgs-cuda/grid-of-clusters.png" />
 <p>当指定 Cluster 时，Thread Block 在 Grid 中的位置相同，但在包含 Cluster 中也有一定位置。</p>
 
 </div>
@@ -67,12 +67,12 @@ CUDA 编程模型使任意大的 Grid 能够在任何大小的 GPU 上运行，�
 
 <div align="center">
 
-<img src="./imgs-cuda/thread-block-scheduling-with-clusters.png" />
+<img src="../imgs-cuda/thread-block-scheduling-with-clusters.png" />
 <p>当指定 Cluster 时，Cluster 中的 Thread Blocks 按其 Cluster 形状在 Grid 中排列。Cluster 的 Thread Blocks 会同时调度在单个 GPC 的 SM 上。</p>
 
 </div>
 
-### Warps and SIMT
+## Warps and SIMT
 
 在一个 Thread Block 内，线程被组织成 32 个线程组成的 Group，称为 Warps。Warp 在单指令多线程（SIMT）范式中执行内核代码。在 SIMT 中，Warp 中的所有线程执行的是相同的内核代码，但每个线程可能遵循代码中的不同分支。也就是说，虽然程序中的所有线程执行相同的代码，但线程不必遵循相同的执行路径。
 
@@ -82,7 +82,7 @@ Warp 中的所有线程同时执行同一条指令。如果  Warp 中的某些�
 
 <div align="center">
 
-<img src="./imgs-cuda/active-warp-lanes.png" />
+<img src="../imgs-cuda/active-warp-lanes.png" />
 <p>在这个例子中，只有线程索引为偶数的线程执行 if 语句中的正文，其他线程在执行正文时被 masked</p>
 
 </div>
@@ -95,9 +95,9 @@ Warp 执行的一个含义是，Thread Block 最好指定为线程总数，即 3
 
 SIMT 常被拿来与单指令多数据（SIMD）并行处理比较，但它们存在一些重要区别。在 SIMD 中，执行遵循单一的控制流路径，而在 SIMT 中，每个线程允许遵循自己的控制流路径。因此，SIMT 不像 SIMD 那样有固定的数据宽度。
 
-### GPU 内存
+## GPU 内存
 
-#### 异构系统中的DRAM存储器
+### 异构系统中的DRAM存储器
 
 GPU 和 CPU 都直接连接 DRAM 芯片。在拥有多个 GPU 的系统中，每个 GPU 都有自己的内存。```从设备代码的角度来看，连接到 GPU 的 DRAM 被称为全局内存，因为它对 GPU 中的所有 SM 都可访问。这些术语并不意味着它在系统内的任何地方都能访问```。连接到 CPU 的 DRAM 称为系统内存或主机内存。
 
@@ -105,7 +105,7 @@ GPU 和 CPU 都直接连接 DRAM 芯片。在拥有多个 GPU 的系统中，每
 
 有 CUDA API 用于分配 GPU 内存、CPU 内存，并在 CPU 与 GPU 之间、GPU 内部或多 GPU 系统中的 GPU 之间复制分配。数据的局部性可以在需要时被显式控制。
 
-#### GPU 中的片上存储器
+### GPU 中的片上存储器
 
 除了全局内存外，每个 GPU 还配备了一些片上内存。```每个 SM 都有自己的寄存器文件和共享内存。这些内存是 SM 的一部分，可以从内存内执行的线程极快地访问，但其他 SM 中运行的线程无法访问```。
 
@@ -117,12 +117,11 @@ GPU 和 CPU 都直接连接 DRAM 芯片。在拥有多个 GPU 的系统中，每
 
 共享内存分配是在 Thread Block 层面进行的。也就是说，与按线程分配的寄存器分配不同，共享内存的分配是整个 Thread Block 共有的。
 
-#### 缓存
+### 缓存
 
 除了可编程存储器外，GPU 还拥有 L1 和 L2 缓存。每个 SM 都有一个 L1 缓存，它是统一数据缓存的一部分。一个更大的 L2 缓存由 GPU 内所有 SM 共享。每个 SM 还有一个独立的常量缓存，用于缓存在全局内存中被声明为内核寿命内常数的值。编译器也可以将内核参数放入常量内存。这可以通过允许内核参数独立于L1数据缓存缓存，提升内核性能。
 
-
-#### 统一内存
+### 统一内存
 
 当应用程序在 GPU 或 CPU 上显式分配内存时，该内存仅对运行在该设备上的代码访问。也就是说，CPU 内存只能从 CPU 代码访问，GPU 内存只能从运行在 GPU 上的内核访问。CUDA API 用于在 CPU 和 GPU 之间复制内存，在正确的时间显式地将数据复制到正确的内存。
 

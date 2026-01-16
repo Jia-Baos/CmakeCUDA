@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="./imgs-analysis/vectorAdd.png" />
+<img src="../imgs-analysis/vectorAdd.png" />
 
 </div>
 
@@ -16,7 +16,7 @@
 
 <div align="center">
 
-<img src="./imgs-analysis/20260115-143624.jpg" />
+<img src="../imgs-analysis/20260115-143624.jpg" />
 
 </div>
 
@@ -30,7 +30,7 @@
 
 <div align="center">
 
-<img src="./imgs-analysis/20260115-144037.jpg" />
+<img src="../imgs-analysis/20260115-144037.jpg" />
 
 </div>
 
@@ -42,7 +42,7 @@
 
 <div align="center">
 
-<img src="./imgs-analysis/20260115-142818.jpg" />
+<img src="../imgs-analysis/20260115-142818.jpg" />
 
 </div>
 
@@ -54,7 +54,7 @@
 
 <div align="center">
 
-<img src="./imgs-analysis/20260115-143215.jpg" />
+<img src="../imgs-analysis/20260115-143215.jpg" />
 
 </div>
 
@@ -72,6 +72,6 @@
 
 <div align="center">
 
-<img src="./imgs-analysis/20260115-145839.jpg" />
+<img src="../imgs-analysis/20260115-145839.jpg" />
 
 </div>
