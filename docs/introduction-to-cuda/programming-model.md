@@ -29,7 +29,7 @@ GPU（整个显卡）
 
 ### Thread Block 和 Grid
 
-当应用程序启动内核时，它会使用许多线程，通常是数百万线程。这些线程被组织成块。A block of threads 被称为 Thread Block，这或许并不令人意外。Thread Block 被组织成 Grid。```Grid 中所有线块的大小和尺寸都相同```。
+当应用程序启动内核时，它会使用许多线程，通常是数百万线程。这些线程被组织成块。A block of threads 被称为 Thread Block，这或许并不令人意外。Thread Block 被组织成 Grid。```Grid 中所有 Thread Block 的大小和尺寸都相同```。
 
 <div align="center">
 

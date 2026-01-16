@@ -47,6 +47,7 @@ __global__ void matmulGPU_native(float *A, float *B, float *C, int M, int N, int
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
 
+    // 防止线程访问超出矩阵数组边界的内存地址，避免出现非法内存访问错误，同时处理矩阵尺寸无法被线程块尺寸整除的场景
     if (row < M && col < N) {
         float sum{};
         for (size_t k = 0; k < K; k++) {
@@ -54,11 +55,25 @@ __global__ void matmulGPU_native(float *A, float *B, float *C, int M, int N, int
         }
         C[row * N + col] = sum;
     }
+
+    // // 行方向：从初始 row 开始，每次跨步 stride_row，覆盖所有符合条件的行
+    // for (int r = row; r < M; r += stride_row) {
+    //     // 列方向：从初始 col 开始，每次跨步 stride_col，覆盖所有符合条件的列
+    //     for (int c = col; c < N; c += stride_col) {
+    //         float sum{};
+    //         for (size_t k = 0; k < K; k++) {
+    //             sum += A[r * K + k] * B[k * N + c];
+    //         }
+    //         C[r * N + c] = sum;
+    //     }
+    // }
 }
 
 #define TILE_SIZE 16
 __global__ void matmulGPU_tiled(float *A, float *B, float *C, int M, int N, int K)
 {
+
+    // 指定 blockDim.x blockDim.y 为 TILE_SIZE
     int tx = threadIdx.x;
     int ty = threadIdx.y;
     int row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -68,8 +83,8 @@ __global__ void matmulGPU_tiled(float *A, float *B, float *C, int M, int N, int 
     __shared__ float As[TILE_SIZE][TILE_SIZE];
     __shared__ float Bs[TILE_SIZE][TILE_SIZE];
 
-    float sum = 0.0f;
-    int numTiles = (K + TILE_SIZE - 1) / TILE_SIZE;
+    float sum = 0.0f;   // 乘法计算后 row，col 位置位置的数值
+    int numTiles = (K + TILE_SIZE - 1) / TILE_SIZE; // 向上取整得到 K 维度需要拆分的小块数量
 
     for (int t = 0; t < numTiles; t++) {
         // load A and B to shared memory
@@ -87,14 +102,14 @@ __global__ void matmulGPU_tiled(float *A, float *B, float *C, int M, int N, int 
             Bs[ty][tx] = 0.0f;
         }
 
-        __syncthreads(); // 同步整个 block 中的线程
+        __syncthreads();    // 同步整个 block 中的线程
 
         // use shared memory to calculate tiles value
         for (size_t k = 0; k < TILE_SIZE; k++) {
             sum += As[ty][k] * Bs[k][tx];
         }
 
-        __syncthreads();
+        __syncthreads();    // 保证计算完成后再更新 As Bs
     }
 
     // write back
@@ -107,8 +122,8 @@ __global__ void matmulGPU_tiled4(float *A, float *B, float *C, int M, int N, int
 {
     cooperative_groups::thread_block block = cooperative_groups::this_thread_block();
 
-    int tx = threadIdx.x;
     int ty = threadIdx.y;
+    int tx = threadIdx.x;
     int block_row = blockIdx.y * TILE_SIZE * 4;
     int block_col = blockIdx.x * TILE_SIZE * 4;
 

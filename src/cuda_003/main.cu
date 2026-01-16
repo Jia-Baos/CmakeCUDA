@@ -104,8 +104,9 @@ __global__ void findMaxGPU_warp(int *data, int n, int *result)
     int gid = blockIdx.x * blockDim.x + threadIdx.x;
     int nThreads = blockDim.x * gridDim.x; // 总线程数
 
-    int lane = tid % 32;
+    // 计算 thread block 内线程所处的 warp lane 和在所处 warp lane 中的 idx
     int warp_id = tid / 32;
+    int lane = tid % 32;
 
     // avoid branch divergence, each thread find its max
     int local_max = INT_MIN;
@@ -115,16 +116,17 @@ __global__ void findMaxGPU_warp(int *data, int n, int *result)
         }
     }
 
-    // warp shuffle reduce
+    // warp shuffle reduce，聚合线程束内的最大值
     for (size_t offset = 16; offset > 0; offset >>= 1) {
+        // 无需共享内存 / 全局内存中转，直接在线程束内线程间传递数据，延迟远低于共享内存
         int neighbor = __shfl_down_sync(0xffffffff, local_max, offset);
         local_max = max(local_max, neighbor);
     }
 
     // collect all warp results to shared memory
-    __shared__ int warp_maxs[8];
-    if (lane == 0) {
-        warp_maxs[warp_id] = local_max;
+    __shared__ int warp_maxs[8];    // blockDims.x / warp size -> 256 / 32
+    if (lane == 0) {    // 
+        warp_maxs[warp_id] = local_max; // 线程束内的最大值位于头部，即 lane = 0 处
     }
 
     __syncthreads();
@@ -133,6 +135,7 @@ __global__ void findMaxGPU_warp(int *data, int n, int *result)
     int block_max = INT_MIN;
     if (warp_id == 0) {
         if (lane < 8) {
+            // 在第 0 个线程束内，挑选 8 个线程来分摊加载共享内存中 8 个线程束的最大值，为后续的线程束洗牌归约做准备
             block_max = warp_maxs[lane];
         }
 

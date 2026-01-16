@@ -45,7 +45,7 @@ __global__ void findMaxGPU_native(int *data, int n, int *result)
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x; // 总线程数
 
-    int local_max = INT_MIN;
+    int local_max = INT_MIN;    // 单个线程独立遍历，计算线程私有局部最大值
 
     // avoid branch divergence
     for (size_t i = idx; i < n; i += stride) {
@@ -54,10 +54,12 @@ __global__ void findMaxGPU_native(int *data, int n, int *result)
         }
     }
 
+    // 每个线程都直接调用 atomicMax(result, local_max)，对全局内存的 result 执行原子操作
     atomicMax(result, local_max);
 }
 
 // GPU version 2
+// 先 thread block 内计算 block 内的最大值，之后通过 atomicMax 计算 block 间的最大值
 __global__ void findMaxGPU_shared(int *data, int n, int *result)
 {
     extern __shared__ int shared_data[];
@@ -75,19 +77,19 @@ __global__ void findMaxGPU_shared(int *data, int n, int *result)
         }
     }
 
-    shared_data[tid] = local_max;
+    shared_data[tid] = local_max;   // thread block 中的线程可以访问共享内存
 
-    __syncthreads();
+    __syncthreads();    // 确保当前线程块内所有线程都已完成写入操作
 
     // 归约
     for (size_t stride = blockDim.x / 2; stride > 0; stride >>= 1) {
-        if (tid < stride) {
+        if (tid < stride) { // 每次循环中，只有 tid < stride 的线程参与操作
             if (shared_data[tid + stride] > shared_data[tid]) {
                 shared_data[tid] = shared_data[tid + stride];
             }
         }
         __syncthreads();
-    }
+    }   // 线程结束，shared_data[0] 中存储的是当前线程块内所有线程的 local_max 中的最大值
 
     // 最后原子操作更新全局最大值
     if (tid == 0) {
