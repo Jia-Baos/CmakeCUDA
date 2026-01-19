@@ -29,7 +29,7 @@ void printDeviceInfo()
         std::cout << "  Device global memory: " << prop.totalGlobalMem / (1024 * 1024 * 1024) << " GB" << std::endl;
         std::cout << "  Number of SM: " << prop.multiProcessorCount << std::endl;
     
-        std::cout << "  Maximum threads per SM: " << prop.maxBlocksPerMultiProcessor << std::endl;
+        std::cout << "  Maximum blocks per SM: " << prop.maxBlocksPerMultiProcessor << std::endl;
         std::cout << "  Maximum threads per Block: " << prop.maxThreadsPerBlock << std::endl;
         std::cout << "  Warp size: " << prop.warpSize << std::endl;
         std::cout << "  Max Threads Dim: [" << prop.maxThreadsDim[0] << ", " << prop.maxThreadsDim[1] << ", " << prop.maxThreadsDim[2] << "]" << std::endl;
@@ -105,7 +105,7 @@ int main()
     // 限制1：每个线程块可以使用的线程数限制
     // 限制2：每个线程块可以使用的共享内存限制
     // 限制3：每个线程块可以使用的寄存器数量限制
-    // 对于当前设备 38个SM，每SM最多16个线程块，每块最多1024个线程
+    // 对于当前设备 38 个SM，每SM最多 16 个 thread block，每块最多 1024 个线程
     nvtxRangePush("Kernel Launch vectorAdd");
     // vectorAdd<<<608, 256>>>(d_a, d_b, d_c, N);
     vectorAdd<<<256, 1024>>>(d_a, d_b, d_c, N);
