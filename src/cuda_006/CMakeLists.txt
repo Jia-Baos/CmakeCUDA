@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.27)
 
-project(cuda_005)
+project(cuda_006)
 
 enable_language(CUDA)
 

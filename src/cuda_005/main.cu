@@ -1,7 +1,7 @@
 /**
  * @file main.cu
  * @author Jia-Baos (18383827268@163.com)
- * @brief cudaMalloc is better than cudaMallocManaged
+ * @brief test dms, which can't work due to the limitations of the kind 0f GPU
  * @version 0.1
  * @date 2026-01-15
  *
