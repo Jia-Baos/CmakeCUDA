@@ -38,8 +38,6 @@ export CUDA_NVCC_FLAGS="-arch=sm_120"   # 根据显卡性能实际调整
 
 ## CUDA 硬件与工具探索
 
-[在线绘图](https://excalidraw.com/)
-
 [techpowerup](https://www.techpowerup.com/gpu-specs/)
 
 ### Nsight Compute
