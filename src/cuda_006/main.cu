@@ -175,6 +175,9 @@ int main()
     const int M = 1024;
     const int N = 1024;
     const int K = 1024;
+    int M_val = M;
+    int N_val = N;
+    int K_val = K;
     const int batch_size = 16;
     const int TILE_SIZE = 16;
     srand(time(NULL));
@@ -344,7 +347,7 @@ int main()
     create_cuda_event(start_3);
     create_cuda_event(stop_3);
 
-     // 重置Device端数据（避免缓存命中导致时间失真）
+    // 重置Device端数据（避免缓存命中导致时间失真）
     for (size_t i = 0; i < batch_size; ++i) {
         CUDA_CHECK(cudaMemsetAsync(d_C_batch[i], 0, M * N * sizeof(float), graph_streams_pool[0]));
     }
@@ -358,7 +361,7 @@ int main()
 
     CUDA_CHECK(cudaGraphLaunch(graphExec_par, graph_streams_pool[0]));
     CUDA_CHECK(cudaStreamSynchronize(graph_streams_pool[0]));
-    
+
     CUDA_CHECK(cudaEventRecord(stop_3));
     CUDA_CHECK(cudaEventSynchronize(stop_3));
 
@@ -386,26 +389,48 @@ int main()
 
     // version4: cuda graph 2
     nvtxRangePush("matmulGPU_tiled_4x4 Graph version 2");
-    const int stream_size_4 = 8;    // set to 16 will make error: oops we found: 1004192
+    const int stream_size_4 = 16; // set to 16 will make error: oops we found: 1004192
     std::vector<cudaStream_t> graph_streams_pool_4(stream_size_4);
     for (size_t i = 0; i < stream_size_4; ++i) {
         CUDA_CHECK(cudaStreamCreate(&graph_streams_pool_4[i]));
     }
 
-    cudaGraph_t graph_par_4;
-    cudaGraphExec_t graphExec_par_4;
+    // 每张图一个 exec
+    std::vector<cudaGraphExec_t> graphExec_par_4(batch_size);
 
-    // 优化：简化Graph捕捉流程，移除冗余的fork/join事件
-    CUDA_CHECK(cudaStreamBeginCapture(graph_streams_pool_4[0], cudaStreamCaptureModeGlobal));
     for (size_t i = 0; i < batch_size; ++i) {
-        int stream_idx = i % stream_size_4;
-        CUDA_CHECK(cudaMemcpyAsync(d_A_batch[i], h_A_batch[i], M * K * sizeof(float), cudaMemcpyHostToDevice, graph_streams_pool_4[stream_idx]));
-        matmulGPU_tiled_4x4<TILE_SIZE><<<grid_dim_cg, block_dim_cg, 0, graph_streams_pool_4[stream_idx]>>>(d_A_batch[i], d_B_shared_T, d_C_batch[i], M, N, K);
-        CUDA_CHECK(cudaGetLastError());
-        CUDA_CHECK(cudaMemcpyAsync(h_C_batch[i], d_C_batch[i], M * N * sizeof(float), cudaMemcpyDeviceToHost, graph_streams_pool_4[stream_idx]));
+        cudaGraph_t graph;
+        CUDA_CHECK(cudaGraphCreate(&graph, 0));
+
+        cudaGraphNode_t h2d, ker, d2h;
+        // 2.1 H2D
+        cudaMemcpy3DParms p1 = { 0 };
+        p1.srcPtr = make_cudaPitchedPtr(h_A_batch[i], M * K * sizeof(float), M * K, 1);
+        p1.dstPtr = make_cudaPitchedPtr(d_A_batch[i], M * K * sizeof(float), M * K, 1);
+        p1.extent = make_cudaExtent(M * K * sizeof(float), 1, 1);
+        p1.kind = cudaMemcpyHostToDevice;
+        CUDA_CHECK(cudaGraphAddMemcpyNode(&h2d, graph, nullptr, 0, &p1));
+
+        // 2.2 Kernel
+        void *args[] = { &d_A_batch[i], &d_B_shared_T, &d_C_batch[i], &M_val, &N_val, &K_val };
+        cudaKernelNodeParams kpar = { 0 };
+        kpar.func = (void *)matmulGPU_tiled_4x4<TILE_SIZE>;
+        kpar.gridDim = grid_dim_cg;
+        kpar.blockDim = block_dim_cg;
+        kpar.kernelParams = args;
+        CUDA_CHECK(cudaGraphAddKernelNode(&ker, graph, &h2d, 1, &kpar));
+
+        // 2.3 D2H
+        cudaMemcpy3DParms p2 = { 0 };
+        p2.srcPtr = make_cudaPitchedPtr(d_C_batch[i], M * N * sizeof(float), M * N, 1);
+        p2.dstPtr = make_cudaPitchedPtr(h_C_batch[i], M * N * sizeof(float), M * N, 1);
+        p2.extent = make_cudaExtent(M * N * sizeof(float), 1, 1);
+        p2.kind = cudaMemcpyDeviceToHost;
+        CUDA_CHECK(cudaGraphAddMemcpyNode(&d2h, graph, &ker, 1, &p2));
+
+        CUDA_CHECK(cudaGraphInstantiate(&graphExec_par_4[i], graph, nullptr, nullptr, 0));
+        CUDA_CHECK(cudaGraphDestroy(graph)); // 实例化完即可销毁原图
     }
-    CUDA_CHECK(cudaStreamEndCapture(graph_streams_pool_4[0], &graph_par_4));
-    CUDA_CHECK(cudaGraphInstantiate(&graphExec_par_4, graph_par_4, NULL, NULL, 0));
 
     // 执行Graph并计时
     cudaEvent_t start_4, stop_4;
@@ -418,21 +443,17 @@ int main()
     }
     CUDA_CHECK(cudaStreamSynchronize(graph_streams_pool_4[0]));
 
-    // 预热Graph
-    CUDA_CHECK(cudaGraphLaunch(graphExec_par_4, graph_streams_pool_4[0]));
-    CUDA_CHECK(cudaStreamSynchronize(graph_streams_pool_4[0]));
-
     CUDA_CHECK(cudaEventRecord(start_4));
 
-    CUDA_CHECK(cudaGraphLaunch(graphExec_par_4, graph_streams_pool_4[0]));
-    CUDA_CHECK(cudaStreamSynchronize(graph_streams_pool_4[0]));
+    // 一次性把全部图发射到不同流
+    for (size_t i = 0; i < batch_size; ++i) {
+        CUDA_CHECK(cudaGraphLaunch(graphExec_par_4[i], graph_streams_pool_4[i]));
+    }
 
-    // // 创建一个空事件，等待所有Graph操作完成
-    // cudaEvent_t done_event;
-    // CUDA_CHECK(cudaEventCreate(&done_event));
-    // CUDA_CHECK(cudaEventRecord(done_event, graph_streams_pool_4[0]));
-    // CUDA_CHECK(cudaEventSynchronize(done_event)); // 等待Graph执行完成
-    CUDA_CHECK(cudaDeviceSynchronize());
+    // 等所有流完成
+    for (size_t i = 0; i < batch_size; ++i) {
+        CUDA_CHECK(cudaStreamSynchronize(graph_streams_pool_4[i]));
+    }
 
     CUDA_CHECK(cudaEventRecord(stop_4));
     CUDA_CHECK(cudaEventSynchronize(stop_4));
@@ -451,8 +472,12 @@ int main()
     // 资源释放
     CUDA_CHECK(cudaEventDestroy(start_4));
     CUDA_CHECK(cudaEventDestroy(stop_4));
-    CUDA_CHECK(cudaGraphDestroy(graph_par_4));
-    CUDA_CHECK(cudaGraphExecDestroy(graphExec_par_4));
+    for (size_t i = 0; i < batch_size; ++i) {
+        if (graphExec_par_4[i]) {
+            cudaGraphExecDestroy(graphExec_par_4[i]);
+            graphExec_par_4[i] = nullptr;
+        }
+    }
 
     for (size_t i = 0; i < stream_size_4; ++i) {
         CUDA_CHECK(cudaStreamDestroy(graph_streams_pool_4[i]));
@@ -463,6 +488,7 @@ int main()
     for (size_t i = 0; i < batch_size; ++i) {
         CUDA_CHECK(cudaFreeHost(h_A_batch[i]));
         CUDA_CHECK(cudaFreeHost(h_C_batch[i]));
+        CUDA_CHECK(cudaFreeHost(h_C_batch_naive[i]));
         CUDA_CHECK(cudaFree(d_A_batch[i]));
         CUDA_CHECK(cudaFree(d_C_batch[i]));
     }
