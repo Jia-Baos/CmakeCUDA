@@ -42,20 +42,6 @@ inline float measure_cuda_time(cudaEvent_t start, cudaEvent_t stop)
     return elapsed_time;
 }
 
-void matmulCPU(float *A, float *B, float *C, int M, int N, int K)
-{
-    for (size_t i = 0; i < M; i++) {
-        for (size_t j = 0; j < N; j++) {
-
-            float sum{};
-            for (size_t k = 0; k < K; k++) {
-                sum += A[i * K + k] * B[k * N + j];
-            }
-            C[i * N + j] = sum;
-        }
-    }
-}
-
 // 优化：模板化核函数，TILE_SIZE作为模板参数
 template <int TILE_SIZE>
 __global__ void matmulGPU_tiled_4x4(float *A, float *B_T, float *C, int M, int N, int K)
@@ -175,7 +161,7 @@ int main()
     const int M = 1024;
     const int N = 1024;
     const int K = 1024;
-    const int batch_size = 16;
+    const int batch_size = 8;
     const int TILE_SIZE = 16;
     srand(time(NULL));
 
@@ -212,16 +198,6 @@ int main()
     }
     nvtxRangePop();
 
-    nvtxRangePush("matmulCPU");
-    clock_t start_cpu = clock();
-    for (size_t i = 0; i < batch_size; ++i) {
-        matmulCPU(h_A_batch[i], h_B_shared, h_C_batch_naive[i], M, N, K);
-    }
-    clock_t end_cpu = clock();
-    double cpu_time = double(end_cpu - start_cpu) / CLOCKS_PER_SEC * 1000;
-    std::cout << "matmulCPU time: " << cpu_time << " ms" << std::endl;
-    nvtxRangePop();
-
     // 预转置B矩阵（优化全局内存访问）
     dim3 trans_block(32, 32);
     dim3 trans_grid((N + trans_block.x - 1) / trans_block.x, (K + trans_block.y - 1) / trans_block.y);
@@ -233,41 +209,6 @@ int main()
     dim3 block_dim_cg(TILE_SIZE, TILE_SIZE);
     dim3 grid_dim_cg((N + TILE_SIZE * 4 - 1) / (TILE_SIZE * 4), (M + TILE_SIZE * 4 - 1) / (TILE_SIZE * 4));
 
-    // version1: sync
-    nvtxRangePush("matmulGPU_tiled_4x4");
-    cudaEvent_t start_1;
-    cudaEvent_t stop_1;
-
-    create_cuda_event(start_1);
-    create_cuda_event(stop_1);
-
-    CUDA_CHECK(cudaEventRecord(start_1));
-    for (size_t i = 0; i < batch_size; ++i) {
-        CUDA_CHECK(cudaMemcpy(d_A_batch[i], h_A_batch[i], M * K * sizeof(float), cudaMemcpyHostToDevice));
-        matmulGPU_tiled_4x4<TILE_SIZE><<<grid_dim_cg, block_dim_cg>>>(d_A_batch[i], d_B_shared_T, d_C_batch[i], M, N, K);
-        CUDA_CHECK(cudaGetLastError());
-        CUDA_CHECK(cudaMemcpy(h_C_batch[i], d_C_batch[i], M * N * sizeof(float), cudaMemcpyDeviceToHost));
-    }
-
-    CUDA_CHECK(cudaEventRecord(stop_1));
-    CUDA_CHECK(cudaEventSynchronize(stop_1));
-
-    float gpu_time_1 = measure_cuda_time(start_1, stop_1);
-    std::cout << "matmulGPU_tiled_4x4, sync time: " << gpu_time_1 << " ms" << std::endl;
-
-    for (size_t i = 0; i < batch_size; ++i) {
-        if (verfyResult(h_C_batch_naive[i], h_C_batch[i], M, N)) {
-            std::cout << "result is correct" << std::endl;
-        } else {
-            std::cout << "result is uncorrect" << std::endl;
-        }
-    }
-
-    CUDA_CHECK(cudaEventDestroy(start_1));
-    CUDA_CHECK(cudaEventDestroy(stop_1));
-    nvtxRangePop();
-
-    // version2: async
     nvtxRangePush("matmulGPU_tiled_4x4 Stream");
     std::vector<cudaStream_t> streams(batch_size);
     for (size_t i = 0; i < batch_size; ++i) {
@@ -280,8 +221,10 @@ int main()
     create_cuda_event(stop_2);
 
     // 预热GPU
+    nvtxRangePush("matmulGPU_tiled_4x4 Stream warmup");
     matmulGPU_tiled_4x4<TILE_SIZE><<<grid_dim_cg, block_dim_cg, 0, streams[0]>>>(d_A_batch[0], d_B_shared_T, d_C_batch[0], M, N, K);
     CUDA_CHECK(cudaGetLastError());
+    nvtxRangePop();
 
     CUDA_CHECK(cudaEventRecord(start_2));
     for (size_t i = 0; i < batch_size; ++i) {
@@ -300,162 +243,19 @@ int main()
     float gpu_time_2 = measure_cuda_time(start_2, stop_2);
     std::cout << "matmulGPU_tiled_4x4, async time: " << gpu_time_2 << " ms" << std::endl;
 
-    for (size_t i = 0; i < batch_size; ++i) {
-        if (verfyResult(h_C_batch_naive[i], h_C_batch[i], M, N)) {
-            std::cout << "result is correct" << std::endl;
-        } else {
-            std::cout << "result is uncorrect" << std::endl;
-        }
-    }
+    // for (size_t i = 0; i < batch_size; ++i) {
+    //     if (verfyResult(h_C_batch_naive[i], h_C_batch[i], M, N)) {
+    //         std::cout << "result is correct" << std::endl;
+    //     } else {
+    //         std::cout << "result is uncorrect" << std::endl;
+    //     }
+    // }
 
     CUDA_CHECK(cudaEventDestroy(start_2));
     CUDA_CHECK(cudaEventDestroy(stop_2));
 
     for (size_t i = 0; i < batch_size; ++i) {
         CUDA_CHECK(cudaStreamDestroy(streams[i]));
-    }
-    nvtxRangePop();
-
-    // version3: cuda graph
-    nvtxRangePush("matmulGPU_tiled_4x4 Graph");
-    const int stream_size_3 = 8;
-    std::vector<cudaStream_t> graph_streams_pool(stream_size_3);
-    for (size_t i = 0; i < stream_size_3; ++i) {
-        CUDA_CHECK(cudaStreamCreate(&graph_streams_pool[i]));
-    }
-
-    cudaGraph_t graph_par;
-    cudaGraphExec_t graphExec_par;
-
-    // 优化：简化Graph捕捉流程，移除冗余的fork/join事件
-    CUDA_CHECK(cudaStreamBeginCapture(graph_streams_pool[0], cudaStreamCaptureModeGlobal));
-    for (size_t i = 0; i < batch_size; ++i) {
-        int stream_idx = i % stream_size_3;
-        CUDA_CHECK(cudaMemcpyAsync(d_A_batch[i], h_A_batch[i], M * K * sizeof(float), cudaMemcpyHostToDevice, graph_streams_pool[stream_idx]));
-        matmulGPU_tiled_4x4<TILE_SIZE><<<grid_dim_cg, block_dim_cg, 0, graph_streams_pool[stream_idx]>>>(d_A_batch[i], d_B_shared_T, d_C_batch[i], M, N, K);
-        CUDA_CHECK(cudaGetLastError());
-        CUDA_CHECK(cudaMemcpyAsync(h_C_batch[i], d_C_batch[i], M * N * sizeof(float), cudaMemcpyDeviceToHost, graph_streams_pool[stream_idx]));
-    }
-    CUDA_CHECK(cudaStreamEndCapture(graph_streams_pool[0], &graph_par));
-    CUDA_CHECK(cudaGraphInstantiate(&graphExec_par, graph_par, NULL, NULL, 0));
-
-    // 执行Graph并计时
-    cudaEvent_t start_3, stop_3;
-    create_cuda_event(start_3);
-    create_cuda_event(stop_3);
-
-     // 重置Device端数据（避免缓存命中导致时间失真）
-    for (size_t i = 0; i < batch_size; ++i) {
-        CUDA_CHECK(cudaMemsetAsync(d_C_batch[i], 0, M * N * sizeof(float), graph_streams_pool[0]));
-    }
-    CUDA_CHECK(cudaStreamSynchronize(graph_streams_pool[0]));
-
-    // 预热Graph
-    CUDA_CHECK(cudaGraphLaunch(graphExec_par, graph_streams_pool[0]));
-    CUDA_CHECK(cudaStreamSynchronize(graph_streams_pool[0]));
-
-    CUDA_CHECK(cudaEventRecord(start_3));
-
-    CUDA_CHECK(cudaGraphLaunch(graphExec_par, graph_streams_pool[0]));
-    CUDA_CHECK(cudaStreamSynchronize(graph_streams_pool[0]));
-    
-    CUDA_CHECK(cudaEventRecord(stop_3));
-    CUDA_CHECK(cudaEventSynchronize(stop_3));
-
-    float gpu_time_3 = measure_cuda_time(start_3, stop_3);
-    std::cout << "matmulGPU_tiled_4x4, graph time: " << gpu_time_3 << " ms" << std::endl;
-
-    for (size_t i = 0; i < batch_size; ++i) {
-        if (verfyResult(h_C_batch_naive[i], h_C_batch[i], M, N)) {
-            std::cout << "result is correct" << std::endl;
-        } else {
-            std::cout << "result is uncorrect" << std::endl;
-        }
-    }
-
-    // 资源释放
-    CUDA_CHECK(cudaEventDestroy(start_3));
-    CUDA_CHECK(cudaEventDestroy(stop_3));
-    CUDA_CHECK(cudaGraphDestroy(graph_par));
-    CUDA_CHECK(cudaGraphExecDestroy(graphExec_par));
-
-    for (size_t i = 0; i < stream_size_3; ++i) {
-        CUDA_CHECK(cudaStreamDestroy(graph_streams_pool[i]));
-    }
-    nvtxRangePop();
-
-    // version4: cuda graph 2
-    nvtxRangePush("matmulGPU_tiled_4x4 Graph version 2");
-    const int stream_size_4 = 8;    // set to 16 will make error: oops we found: 1004192
-    std::vector<cudaStream_t> graph_streams_pool_4(stream_size_4);
-    for (size_t i = 0; i < stream_size_4; ++i) {
-        CUDA_CHECK(cudaStreamCreate(&graph_streams_pool_4[i]));
-    }
-
-    cudaGraph_t graph_par_4;
-    cudaGraphExec_t graphExec_par_4;
-
-    // 优化：简化Graph捕捉流程，移除冗余的fork/join事件
-    CUDA_CHECK(cudaStreamBeginCapture(graph_streams_pool_4[0], cudaStreamCaptureModeGlobal));
-    for (size_t i = 0; i < batch_size; ++i) {
-        int stream_idx = i % stream_size_4;
-        CUDA_CHECK(cudaMemcpyAsync(d_A_batch[i], h_A_batch[i], M * K * sizeof(float), cudaMemcpyHostToDevice, graph_streams_pool_4[stream_idx]));
-        matmulGPU_tiled_4x4<TILE_SIZE><<<grid_dim_cg, block_dim_cg, 0, graph_streams_pool_4[stream_idx]>>>(d_A_batch[i], d_B_shared_T, d_C_batch[i], M, N, K);
-        CUDA_CHECK(cudaGetLastError());
-        CUDA_CHECK(cudaMemcpyAsync(h_C_batch[i], d_C_batch[i], M * N * sizeof(float), cudaMemcpyDeviceToHost, graph_streams_pool_4[stream_idx]));
-    }
-    CUDA_CHECK(cudaStreamEndCapture(graph_streams_pool_4[0], &graph_par_4));
-    CUDA_CHECK(cudaGraphInstantiate(&graphExec_par_4, graph_par_4, NULL, NULL, 0));
-
-    // 执行Graph并计时
-    cudaEvent_t start_4, stop_4;
-    create_cuda_event(start_4);
-    create_cuda_event(stop_4);
-
-    // 重置Device端数据（避免缓存命中导致时间失真）
-    for (size_t i = 0; i < batch_size; ++i) {
-        CUDA_CHECK(cudaMemsetAsync(d_C_batch[i], 0, M * N * sizeof(float), graph_streams_pool_4[0]));
-    }
-    CUDA_CHECK(cudaStreamSynchronize(graph_streams_pool_4[0]));
-
-    // 预热Graph
-    CUDA_CHECK(cudaGraphLaunch(graphExec_par_4, graph_streams_pool_4[0]));
-    CUDA_CHECK(cudaStreamSynchronize(graph_streams_pool_4[0]));
-
-    CUDA_CHECK(cudaEventRecord(start_4));
-
-    CUDA_CHECK(cudaGraphLaunch(graphExec_par_4, graph_streams_pool_4[0]));
-    CUDA_CHECK(cudaStreamSynchronize(graph_streams_pool_4[0]));
-
-    // // 创建一个空事件，等待所有Graph操作完成
-    // cudaEvent_t done_event;
-    // CUDA_CHECK(cudaEventCreate(&done_event));
-    // CUDA_CHECK(cudaEventRecord(done_event, graph_streams_pool_4[0]));
-    // CUDA_CHECK(cudaEventSynchronize(done_event)); // 等待Graph执行完成
-    CUDA_CHECK(cudaDeviceSynchronize());
-
-    CUDA_CHECK(cudaEventRecord(stop_4));
-    CUDA_CHECK(cudaEventSynchronize(stop_4));
-
-    float gpu_time_4 = measure_cuda_time(start_4, stop_4);
-    std::cout << "matmulGPU_tiled_4x4, graph 2 time: " << gpu_time_4 << " ms" << std::endl;
-
-    for (size_t i = 0; i < batch_size; ++i) {
-        if (verfyResult(h_C_batch_naive[i], h_C_batch[i], M, N)) {
-            std::cout << "result is correct" << std::endl;
-        } else {
-            std::cout << "result is uncorrect" << std::endl;
-        }
-    }
-
-    // 资源释放
-    CUDA_CHECK(cudaEventDestroy(start_4));
-    CUDA_CHECK(cudaEventDestroy(stop_4));
-    CUDA_CHECK(cudaGraphDestroy(graph_par_4));
-    CUDA_CHECK(cudaGraphExecDestroy(graphExec_par_4));
-
-    for (size_t i = 0; i < stream_size_4; ++i) {
-        CUDA_CHECK(cudaStreamDestroy(graph_streams_pool_4[i]));
     }
     nvtxRangePop();
 

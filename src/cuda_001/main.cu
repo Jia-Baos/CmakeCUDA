@@ -44,8 +44,8 @@ void printDeviceInfo()
         std::cout << "  Persisting L2 Max Cache Size: " << prop.persistingL2CacheMaxSize / (1024 * 1024) << " MB" << std::endl;
         std::cout << "  Access Policy Max Window Size: " << prop.accessPolicyMaxWindowSize / (1024 * 1024) << " MB" << std::endl;
 
-        std::cout << "  Concurrent Kernels: " << (prop.concurrentKernels ? "Yes" : "No") << std::endl;
-        std::cout << "  Async Engine Count: " << (prop.asyncEngineCount ? "Yes" : "No") << std::endl;
+        std::cout << "  Concurrent Kernels: " << (prop.concurrentKernels ? "Yes" : "No") << ", " << prop.concurrentKernels << std::endl;
+        std::cout << "  Async Engine Count: " << (prop.asyncEngineCount ? "Yes" : "No") << ", " << prop.asyncEngineCount << std::endl;
         std::cout << "  Memory Clock Rate: " << prop.memoryClockRate << "KHz" << std::endl;
         std::cout << "  Peak Memory Bandwidth: " << 2.0 * prop.memoryClockRate * (prop.memoryBusWidth / 8) / 1.0e6 << "GB/s" << std::endl;
     }
