@@ -362,6 +362,12 @@ int main()
     CUDA_CHECK(cudaGraphLaunch(graphExec_par, graph_streams_pool[0]));
     CUDA_CHECK(cudaStreamSynchronize(graph_streams_pool[0]));
 
+    CUDA_CHECK(cudaGraphLaunch(graphExec_par, graph_streams_pool[0]));
+    CUDA_CHECK(cudaStreamSynchronize(graph_streams_pool[0]));
+
+    CUDA_CHECK(cudaGraphLaunch(graphExec_par, graph_streams_pool[0]));
+    CUDA_CHECK(cudaStreamSynchronize(graph_streams_pool[0]));
+
     CUDA_CHECK(cudaEventRecord(stop_3));
     CUDA_CHECK(cudaEventSynchronize(stop_3));
 
